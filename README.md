@@ -15,7 +15,8 @@ Then share something through it, for example a terminal with
 
 ## Releases
 
-Tagging `vX.Y.Z` on `main` publishes `yonder-relay` binaries for Linux and
+Running the release workflow from `main` with a version such as `v0.2.0`, or
+pushing a `vX.Y.Z` tag, publishes `yonder-relay` binaries for Linux and
 macOS on the GitHub release. The same tag versions the Go module and the
 Swift package.
 
