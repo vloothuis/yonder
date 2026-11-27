@@ -85,12 +85,13 @@ plain-HTTP relay unless it is on a loopback or `*.localhost` host.
 
 | Threat | Mitigation |
 |---|---|
-| Guessing a code | 128-bit code; wrong codes are rate-limited per source IP and globally, never per share (the share ID is public through DNS and SNI) |
+| Guessing a code | 128-bit code; after 10 wrong codes a minute from one client network (an IPv4 address or an IPv6 /64) on one share, the relay answers 429 |
+| Locking viewers out with wrong codes | The code is checked before the limit, so the right code always gets in; there is no relay-wide limit |
 | Code leaks into logs or Referer | Code lives in the URL fragment, which browsers never send; the gate removes it after use |
 | Leaked link | `Approve` gives live per-visitor approval; sessions expire after 12 idle hours |
 | Approval flood | Pending approvals are capped per share and per source IP |
 | Hostile sibling share (cross-site WebSocket hijacking, login CSRF) | Origin check on upgrades, unsafe methods and the gate |
-| Cookie tossing from a sibling share | `__Host-` cookie; app `Set-Cookie` with `Domain` or the yonder name is dropped |
+| Cookie tossing from a sibling share | `__Host-` cookie; app `Set-Cookie` with `Domain` or the yonder name is dropped. Page scripts can still set cookies for the base domain, so apps must not trust cookies they did not set. Putting the base domain on the Public Suffix List closes this |
 | Strangers create tunnels | Bearer token per client, constant-time compare, share limit per token |
 | Cookie valid on another share | Host-only cookie, session token bound to one share |
 | Visitor forges identity or proxy headers | Relay strips them and sets its own |

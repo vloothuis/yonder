@@ -322,3 +322,32 @@ func TestRelayLoss(t *testing.T) {
 	}
 	l.Close()
 }
+
+func TestWrongCodesLimitPerShare(t *testing.T) {
+	e := newEnv(t)
+	listen := func() *yonder.Listener {
+		l, err := yonder.Listen(context.Background(), yonder.Options{Relay: e.relayURL, Token: "secret"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		serve(t, l, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+		return l
+	}
+	a, b := listen(), listen()
+	originA, codeA := split(t, a.URL())
+	originB, codeB := split(t, b.URL())
+	for i := 0; i < 10; i++ {
+		if r := e.auth(t, originA, "wrong", originA); r.StatusCode != http.StatusForbidden {
+			t.Fatalf("wrong code %d: %s", i, r.Status)
+		}
+	}
+	if r := e.auth(t, originA, "wrong", originA); r.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("over the limit: %s", r.Status)
+	}
+	// The right code still gets in, and other shares are not affected.
+	e.login(t, originA, codeA)
+	if r := e.auth(t, originB, "wrong", originB); r.StatusCode != http.StatusForbidden {
+		t.Fatalf("other share: %s", r.Status)
+	}
+	e.login(t, originB, codeB)
+}

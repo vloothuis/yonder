@@ -68,8 +68,6 @@ type Server struct {
 	tokens map[[32]byte]bool
 	log    *slog.Logger
 
-	wrongCodes *limiter
-
 	mu      sync.Mutex
 	shares  map[string]*share
 	byToken map[[32]byte]int
@@ -107,13 +105,12 @@ func New(cfg Config) (*Server, error) {
 		cfg.Logger = slog.New(slog.NewTextHandler(io.Discard, nil))
 	}
 	s := &Server{
-		cfg:        cfg,
-		base:       base,
-		tokens:     map[[32]byte]bool{},
-		log:        cfg.Logger,
-		wrongCodes: newLimiter(10, time.Minute, 1000),
-		shares:     map[string]*share{},
-		byToken:    map[[32]byte]int{},
+		cfg:     cfg,
+		base:    base,
+		tokens:  map[[32]byte]bool{},
+		log:     cfg.Logger,
+		shares:  map[string]*share{},
+		byToken: map[[32]byte]int{},
 	}
 	for _, t := range cfg.Tokens {
 		if t == "" {
@@ -170,6 +167,7 @@ func (s *Server) handleConnect(w http.ResponseWriter, r *http.Request) {
 		approve:  approve,
 		sessions: map[string]time.Time{},
 		pending:  map[string]bool{},
+		wrong:    newLimiter(10, time.Minute, 10000),
 	}
 	s.mu.Lock()
 	if s.byToken[tokHash] >= s.cfg.MaxSharesPerToken {
@@ -274,6 +272,7 @@ type share struct {
 	origin   string
 	codeHash []byte
 	approve  bool
+	wrong    *limiter // wrong codes per client network
 
 	sess      *yamux.Session
 	transport *http.Transport
@@ -407,18 +406,19 @@ func (sh *share) handleAuth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ip := sh.srv.clientIP(r)
-	if !sh.srv.wrongCodes.allow(ip) {
-		http.Error(w, "Too many wrong codes. Try again in a minute.", http.StatusTooManyRequests)
-		return
-	}
 	r.Body = http.MaxBytesReader(w, r.Body, 1024)
 	if err := r.ParseForm(); err != nil {
 		http.Error(w, "bad request", http.StatusBadRequest)
 		return
 	}
+	// The right code always gets in, so wrong guesses cannot lock anyone out.
+	// Wrong guesses are limited per share and client network.
 	sum := sha256.Sum256([]byte(r.PostForm.Get("code")))
 	if subtle.ConstantTimeCompare(sum[:], sh.codeHash) != 1 {
-		sh.srv.wrongCodes.hit(ip)
+		if !sh.wrong.hit(clientNet(ip)) {
+			http.Error(w, "Too many wrong codes. Try again in a minute.", http.StatusTooManyRequests)
+			return
+		}
 		http.Error(w, "Wrong code.", http.StatusForbidden)
 		return
 	}
@@ -588,43 +588,46 @@ func truncate(s string, n int) string {
 	return s
 }
 
-// limiter counts failures per key in fixed windows, with a global ceiling.
+// limiter counts failures per key in fixed windows. It tracks at most maxKeys
+// keys per window; once full, new keys count as over the limit.
 type limiter struct {
-	perKey int
-	window time.Duration
-	global int
+	perKey  int
+	window  time.Duration
+	maxKeys int
 
-	mu      sync.Mutex
-	start   time.Time
-	counts  map[string]int
-	globalN int
+	mu     sync.Mutex
+	start  time.Time
+	counts map[string]int
 }
 
-func newLimiter(perKey int, window time.Duration, global int) *limiter {
-	return &limiter{perKey: perKey, window: window, global: global, counts: map[string]int{}}
+func newLimiter(perKey int, window time.Duration, maxKeys int) *limiter {
+	return &limiter{perKey: perKey, window: window, maxKeys: maxKeys, counts: map[string]int{}}
 }
 
-func (l *limiter) roll() {
+// hit records a failure for key and reports whether key is still within the limit.
+func (l *limiter) hit(key string) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
 	if time.Since(l.start) > l.window {
 		l.start = time.Now()
 		l.counts = map[string]int{}
-		l.globalN = 0
 	}
+	n, ok := l.counts[key]
+	if !ok && len(l.counts) >= l.maxKeys {
+		return false
+	}
+	l.counts[key] = n + 1
+	return n < l.perKey
 }
 
-func (l *limiter) allow(key string) bool {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.roll()
-	return l.counts[key] < l.perKey && l.globalN < l.global
-}
-
-func (l *limiter) hit(key string) {
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	l.roll()
-	l.counts[key]++
-	l.globalN++
+// clientNet groups IPv6 clients by /64, since one host often holds a whole /64.
+func clientNet(ip string) string {
+	a, err := netip.ParseAddr(ip)
+	if err != nil || a.Is4() {
+		return ip
+	}
+	p, _ := a.Prefix(64)
+	return p.String()
 }
 
 //go:embed gate.html
