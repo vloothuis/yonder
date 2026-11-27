@@ -85,7 +85,7 @@ plain-HTTP relay unless it is on a loopback or `*.localhost` host.
 
 | Threat | Mitigation |
 |---|---|
-| Guessing a code | 128-bit code; after 10 wrong codes a minute from one client network (an IPv4 address or an IPv6 /64) on one share, the relay answers 429 |
+| Guessing a code | 128-bit code from `crypto/rand`, so online guessing is infeasible at any request rate. The wrong-code limit (429 after 10 a minute per client network, an IPv4 address or an IPv6 /64, on one share) only tells clients to slow down; it does not protect the code |
 | Locking viewers out with wrong codes | The code is checked before the limit, so the right code always gets in; there is no relay-wide limit |
 | Code leaks into logs or Referer | Code lives in the URL fragment, which browsers never send; the gate removes it after use |
 | Leaked link | `Approve` gives live per-visitor approval; sessions expire after 12 idle hours |
