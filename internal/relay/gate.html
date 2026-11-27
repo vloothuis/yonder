@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shared app</title>
+<style>
+  body { font: 16px system-ui, sans-serif; max-width: 26rem; margin: 15vh auto; padding: 0 1rem; color: #222; }
+  input { font: inherit; padding: .4rem; width: 100%; box-sizing: border-box; margin: .5rem 0; }
+  button { font: inherit; padding: .4rem 1rem; }
+  #msg { min-height: 1.5em; color: #555; }
+</style>
+</head>
+<body>
+<h1>Shared app</h1>
+<p id="msg">Enter the access code you were given.</p>
+<form id="f" method="post" action="/_yonder/auth">
+  <input name="code" autocomplete="off" autofocus aria-label="Access code">
+  <button>Open</button>
+</form>
+<script src="/_yonder/gate.js"></script>
+</body>
+</html>
