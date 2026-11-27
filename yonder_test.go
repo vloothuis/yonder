@@ -295,14 +295,14 @@ func TestRelayLoss(t *testing.T) {
 	e := newEnv(t)
 	// A raw TCP proxy in front of the relay, so the test can cut the connection.
 	pl, _ := net.Listen("tcp", "127.0.0.1:0")
-	var upstream net.Conn
+	upstreamc := make(chan net.Conn, 1)
 	go func() {
 		c, err := pl.Accept()
 		if err != nil {
 			return
 		}
 		u, _ := e.dialer(context.Background(), "tcp", "")
-		upstream = u
+		upstreamc <- u
 		go io.Copy(u, c)
 		io.Copy(c, u)
 		c.Close()
@@ -311,7 +311,7 @@ func TestRelayLoss(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	upstream.Close()
+	(<-upstreamc).Close()
 	select {
 	case <-l.Done():
 	case <-time.After(3 * time.Second):
