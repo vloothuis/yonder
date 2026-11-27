@@ -13,6 +13,12 @@ go run ./cmd/yonder-relay -token dev
 Then share something through it, for example a terminal with
 [yterm](https://github.com/vloothuis/yterm).
 
+## Releases
+
+Tagging `vX.Y.Z` on `main` publishes `yonder-relay` binaries for Linux and
+macOS on the GitHub release. The same tag versions the Go module and the
+Swift package.
+
 ## Go library
 
 ```bash
@@ -27,7 +33,7 @@ dependencies) with the same model: `YonderListener.listen` opens the share,
 Add it with SwiftPM:
 
 ```swift
-.package(url: "https://github.com/vloothuis/yonder", branch: "main")
+.package(url: "https://github.com/vloothuis/yonder", from: "0.1.0")
 ```
 
 Its tests run against a built relay:
