@@ -23,6 +23,9 @@ import (
 	"github.com/vloothuis/yonder/internal/relay"
 )
 
+// version is set at release build time.
+var version = "dev"
+
 type listFlag []string
 
 func (l *listFlag) String() string     { return strings.Join(*l, ",") }
@@ -37,12 +40,17 @@ func main() {
 		tlsKey     = flag.String("tls-key", "", "certificate key file")
 		tokensFile = flag.String("tokens-file", "", "file with one client token per line")
 		maxShares  = flag.Int("max-shares", 20, "concurrent shares per token")
+		showVer    = flag.Bool("version", false, "print the version and exit")
 		tokens     listFlag
 		proxies    listFlag
 	)
 	flag.Var(&tokens, "token", "accepted client token (repeatable; also $YONDER_TOKENS, comma-separated)")
 	flag.Var(&proxies, "trusted-proxy", "CIDR whose X-Forwarded-For is trusted (repeatable)")
 	flag.Parse()
+	if *showVer {
+		fmt.Println(version)
+		return
+	}
 
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 	if env := os.Getenv("YONDER_TOKENS"); env != "" {
